@@ -52,7 +52,6 @@ def create_workflow():
     workflow.add_edge("tools", "agent")
     workflow.add_edge("user_inquiry", "agent")
     workflow.add_edge("require_confirmation", "agent")
-    workflow.config = {"recursion_limit": 45}
     return workflow.compile()
 
 
@@ -119,7 +118,7 @@ def main():
             state["messages"].append(HumanMessage(content=user_input))
 
             # 执行工作流
-            output = app.invoke(state)
+            output = app.invoke(state,config = {"recursion_limit": 1000})
             state = output
             last_message = state["messages"][-1]
 
