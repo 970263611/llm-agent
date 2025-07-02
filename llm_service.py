@@ -23,7 +23,7 @@ class QwenLLM:
         """初始化连接"""
         self.model = "qwen-plus"
         self.client = OpenAI(
-            api_key="sk-60ac6b51fa52443988348a1b3f5b2a0d",
+            api_key="",
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         )
         tools = ProjectTools.get_all_tools()
