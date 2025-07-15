@@ -1,0 +1,16 @@
+# 日志配置
+log_config:
+  enabled: true
+  level: INFO  # 可设置为 DEBUG/INFO/WARNING/ERROR/CRITICAL
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  filename: "agent_execution.log"  # 设为空则禁用文件日志
+  console_output: true
+  max_size_mb: 10    # 单个日志文件最大MB
+  backup_count: 5    # 保留的日志文件数量
+
+# LLM 配置
+llm_config:
+  api_key: ""  
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  model: "qwen-plus"
+  timeout: 30       

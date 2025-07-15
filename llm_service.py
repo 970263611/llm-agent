@@ -6,8 +6,12 @@ from typing import List, Dict, Any
 from langchain.schema import AIMessage
 from langchain.tools import BaseTool
 from tools import ProjectTools
+from config_loader import CONFIG
 
 logger = logging.getLogger(__name__)
+
+
+llm_config = CONFIG["llm_config"]
 
 # =================连接llm =================
 class QwenLLM:
@@ -21,14 +25,14 @@ class QwenLLM:
     
     def _initialize(self):
         """初始化连接"""
-        self.model = "qwen-plus"
+        self.model = llm_config["model"]
         self.client = OpenAI(
-            api_key="",
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            api_key=llm_config["api_key"],
+            base_url=llm_config["base_url"],
         )
         tools = ProjectTools.get_all_tools()
         self.openai_tools = [self._convert_tool(tool) for tool in tools]
-        logger.info("QwenLLM 连接初始化完成")
+        logger.debug("QwenLLM 连接初始化完成")
 
     def _convert_tool(self, tool: BaseTool) -> Dict[str, Any]:
         """将LangChain工具转换为OpenAI兼容格式"""
@@ -63,7 +67,7 @@ class QwenLLM:
                 messages=messages,
                 tools=self.openai_tools,
                 tool_choice="auto",
-                timeout=30  
+                timeout=llm_config["timeout"]  
             )
             msg = completion.choices[0].message
             

@@ -5,6 +5,10 @@ import logging
 from datetime import datetime
 from typing import Dict, Any
 from langchain.tools import tool
+import pandas as pd
+from PyPDF2 import PdfReader
+from openpyxl import load_workbook
+import docx
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +24,9 @@ class ProjectTools:
             cls.tools_cache = [
                 cls.create_file,
                 cls.run_command,
-                cls.get_directory_structure
+                # cls.get_directory_structure
             ]
-            logger.info("工具列表初始化完成")
+            logger.debug("工具列表初始化完成")
         return cls.tools_cache
     
     @tool
@@ -42,7 +46,7 @@ class ProjectTools:
         except Exception as e:
             error_msg = f"文件创建失败: {str(e)}"
             logger.error(f"工具调用失败: create_file {error_msg}")
-            return {"status": "error", "message": error_msg}
+            return {"status": "error", "message": error_msg}  
     @tool
     def run_command(command: str, path: str = ".") -> Dict[str, Any]:
         """在指定目录执行终端命令"""
@@ -142,5 +146,103 @@ class ProjectTools:
             return {
                 "status": "error",
                 "message": str(e)
-            }   
+            }  
+
+
+    @classmethod
+    def upload_and_analyze_file(cls, file_path: str, analysis_instructions: str = "请分析此文件内容") -> Dict[str, Any]:
+        """
+        上传并分析文件内容(PDF, Excel, Word, CSV等)，返回结构化数据供LLM分析。
+        
+        参数:
+            file_path: 要分析的文件路径
+            analysis_instructions: 对LLM的具体分析指令
+            
+        返回:
+            包含文件内容摘要和元数据的字典，适合LLM进一步处理
+        """
+        try:
+            # 验证文件存在
+            if not os.path.exists(file_path):
+                return {"status": "error", "message": "文件不存在"}
+            
+            # 获取文件信息
+            file_name = os.path.basename(file_path)
+            file_size = os.path.getsize(file_path)
+            file_ext = os.path.splitext(file_name)[1].lower()
+            
+            # 根据文件类型解析内容
+           
+            content = ""
+            if file_ext == '.pdf':
+                content = cls.extract_pdf_content(file_path)
+            elif file_ext in ('.xlsx', '.xls'):
+                content = cls.extract_excel_content(file_path)
+            elif file_ext == '.docx':
+                content = cls.extract_word_content(file_path)
+            elif file_ext == '.txt':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            else:
+                return {"status": "error", "message": f"不支持的文件类型: {file_ext}"}
+            
+            return {
+                "status": "success",
+                "file_name": file_name,
+                "file_size": file_size,
+                "content_count": len(content),
+                "content": content,  
+                "instructions": analysis_instructions
+            }
+            
+        except Exception as e:
+            error_msg = f"文件分析失败: {str(e)}"
+            logger.error(f"文件分析错误: {error_msg}", exc_info=True)
+            return {"status": "error", "message": error_msg}
+        
+    @classmethod
+    def extract_pdf_content(self,file_path: str) -> str:
+        """提取PDF文件文本内容"""
+        content = []
+        with open(file_path, 'rb') as f:
+            reader = PdfReader(f)
+            for page in reader.pages:
+                text = page.extract_text()
+                if text:
+                    content.append(text)
+        return "\n".join(content)
+    
+    @classmethod
+    def extract_excel_content(self,file_path: str) -> str:
+        """提取Excel文件内容"""
+        content = []
+        wb = load_workbook(filename=file_path, read_only=True)
+        for sheet_name in wb.sheetnames:
+            sheet = wb[sheet_name]
+            content.append(f"\n=== 工作表: {sheet_name} ===")
+            for row in sheet.iter_rows(values_only=True):
+                row_content = " | ".join(str(cell) if cell is not None else "" for cell in row)
+                content.append(row_content)
+        return "\n".join(content)
+    
+    @classmethod
+    def extract_csv_content(self,file_path: str) -> str:
+        """提取CSV文件内容"""
+        try:
+            # 尝试UTF-8编码
+            df = pd.read_csv(file_path, encoding='utf-8')
+        except UnicodeDecodeError:
+            try:
+                # 尝试GBK编码(中文常见)
+                df = pd.read_csv(file_path, encoding='gbk')
+            except Exception as e:
+                raise ValueError(f"无法解析CSV文件编码: {str(e)}")
+        
+        return df.to_string(index=False)
+    
+    @classmethod
+    def extract_word_content(self, file_path: str) -> str:
+        """提取Word文档内容"""
+        doc = docx.Document(file_path)
+        return "\n".join(paragraph.text for paragraph in doc.paragraphs if paragraph.text) 
 

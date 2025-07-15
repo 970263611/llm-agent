@@ -9,6 +9,7 @@ from typing import TypedDict, Annotated, Optional
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from tools import ProjectTools
+
 logger = logging.getLogger(__name__)
 
 # =================类型定义 =================
@@ -23,12 +24,12 @@ class AgentState(TypedDict):
 
 # =================工作流节点 =================
 def agent_node(state: AgentState):
-    print("\n[AGENT_NODE] 进入agent节点")
+    ("\n[AGENT_NODE] 进入agent节点")
     recursion_count = state.get("recursion_count", 0)
 
     # 确保至少包含系统消息和用户输入
     if len(state["messages"]) < 2:
-        print("[ERROR] 消息历史不完整！")
+        logger.debug("[ERROR] 消息历史不完整！")
         return state
 
     if state.get("should_terminate", False):
@@ -66,7 +67,7 @@ def agent_node(state: AgentState):
 
 
     response = llm.chat(llm_messages)
-    logger.info(f"LLM响应: {response.content[:200]}...")
+    logger.debug(f"LLM响应: {response.content[:200]}...")
 
     return {
         # 保留完整历史+新响应
@@ -77,7 +78,7 @@ def agent_node(state: AgentState):
     }
 
 def route(state: AgentState):
-    print("进入了route")
+    logger.debug("进入了route")
     last_message = state["messages"][-1]
     recursion_count = state.get("recursion_count", 0)
     # 优先处理终止条件（用户输入exit/quit）
@@ -104,7 +105,7 @@ def route(state: AgentState):
     return "agent"
 
 def tool_node(state: AgentState):
-    print("\n[TOOL_NODE] 进入tool节点")
+    logger.debug("\n[TOOL_NODE] 进入tool节点")
     recursion_count = state.get("recursion_count", 0)
 
     last_message = state["messages"][-1]
@@ -169,7 +170,7 @@ def user_inquiry_node(state: AgentState):
     }
 
 def require_confirmation(state: AgentState):
-    print("达到操作限制，等待用户确认")
+    logger.debug("达到操作限制，等待用户确认")
     return {
         "messages": [AIMessage(content="【确认】已达到操作限制，是否继续？(继续/退出)")],
         "recursion_count": 0,

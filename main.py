@@ -4,30 +4,37 @@ import logging
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
 from langchain_core.messages import ToolMessage, BaseMessage
 from langgraph.graph import StateGraph, END
+from tools import ProjectTools
 from workflow_nodes import (
     agent_node, tool_node, user_inquiry_node, 
     require_confirmation, route
 )
 from workflow_nodes import(AgentState)
 from langchain_core.messages import ToolMessage
+from config_loader import CONFIG
+import logging
 
 
-# ================= 日志配置 =================
+log_config = CONFIG["log_config"]
+
+# 仅在日志启用时配置
+if log_config["enabled"]:
+    handlers = [logging.FileHandler(log_config["filename"])]
+    if log_config["console_output"]:
+        handlers.append(logging.StreamHandler())
+    
+    logging.basicConfig(
+        level=getattr(logging, log_config["level"]),
+        format=log_config["format"],
+        handlers=handlers
+    )
+
 logger = logging.getLogger(__name__)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('agent_execution.log'),
-        logging.StreamHandler()
-    ]
-)
 
 # ================= 创建工作流,节点连线形成图 =================
 def create_workflow():
     logger = logging.getLogger(__name__)
-    logger.info("初始化工作流...")
+    logger.debug("初始化工作流...")
     
     workflow = StateGraph(AgentState)
     workflow.add_node("agent", agent_node)
@@ -93,6 +100,11 @@ def main():
         - 每次只执行一个明确的步骤
         - 尽量减少与用户的交流，能自主一次完成,就避免询问用户
 
+        [文件处理能力]
+        - 你现在可以分析用户上传的文件，用户通过输入 #文件路径 的方式上传文件。
+        - 文件内容会直接提供给你，你可以根据内容进行分析和回答。
+        - 文件分析后的返回结构，采用标准的JSON格式返回
+
         响应格式:
         - 对于操作执行: 使用工具函数
         - 对于信息询问: 直接回复用户
@@ -107,18 +119,45 @@ def main():
         is_waiting_response=False
     )
 
-    try:
-        while True:
+    while True:
+        try:
             # 获取用户输入
             user_input = input("\n> ").strip()
             if not user_input:
                 continue
 
+            # 检查是否是文件上传指令
+            if user_input.startswith('#'):
+                file_path = user_input[1:].strip()
+                if not file_path:
+                    print("\n错误: 请提供有效的文件路径")
+                    continue
+                
+                # 调用文件分析工具
+                print(f"\n正在分析文件: {file_path}")
+                analysis_result = ProjectTools.upload_and_analyze_file(file_path)
+                
+                if analysis_result["status"] == "success":
+                    # 构造包含文件内容的消息
+                    file_content = f"""
+                    [文件分析结果]
+                    文件名: {analysis_result["file_name"]}
+                    文件大小: {analysis_result["file_size"]}字节
+                    内容预览:
+                    {analysis_result["content"]} 
+                    """
+                    state["messages"].append(HumanMessage(content=file_content))
+                    print("\n文件内容已加载，请告诉我如何分析")
+                    continue
+                else:
+                    print(f"\n文件分析失败: {analysis_result['message']}")
+                    continue
+
             # 创建新状态时保留所有历史消息
             state["messages"].append(HumanMessage(content=user_input))
 
             # 执行工作流
-            output = app.invoke(state,config = {"recursion_limit": 1000})
+            output = app.invoke(state, config={"recursion_limit": 1000})
             state = output
             last_message = state["messages"][-1]
 
@@ -135,12 +174,13 @@ def main():
             if state.get("should_terminate", False):
                 print("\n会话已结束")
                 break
-
-    except KeyboardInterrupt:
-        print("\n会话已终止")
-    except Exception as e:
-        logger.error(f"系统错误: {str(e)}")
-        print(f"\n发生系统错误: {str(e)}")
+        except KeyboardInterrupt:
+            print("\n会话已终止")
+            break
+        except Exception as e:
+            logger.error(f"系统错误: {str(e)}")
+            continue
+        
 
 
 if __name__ == "__main__":
