@@ -92,7 +92,7 @@ async def analyze_file(
             {analysis_result["instructions"]} 
             """
             llm_messages = []
-            llm_messages.append({"role": "system", "content": str(file_content)})
+            llm_messages.append({"role": "system", "content": str(prompt)})
             llm_messages.append({"role": "user", "content": str(file_content)})
             response = llm.chat(llm_messages)
           
@@ -105,7 +105,7 @@ async def analyze_file(
         raise HTTPException(status_code=500, detail=f"文件处理失败: {str(e)}")
     
 def parse_llm_json_response(llm_response: str) -> dict:
-    
+
     # 情况1：如果已经是dict直接返回
     if isinstance(llm_response, dict):
         return llm_response
